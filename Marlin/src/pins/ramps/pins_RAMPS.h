@@ -282,7 +282,7 @@
     #define FAN0_PIN                MOSFET_B_PIN
   #endif
 #endif
-
+#undef FAN_PIN
 //
 // Misc. Functions
 //
