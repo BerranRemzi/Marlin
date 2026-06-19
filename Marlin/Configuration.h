@@ -437,6 +437,24 @@
 //#define MAX31865_SENSOR_OHMS      100
 //#define MAX31865_CALIBRATION_OHMS 430
 
+//===========================================================================
+//============================ Smart Hotend =================================
+//===========================================================================
+// Use a CH32V003 "dumb I/O expander" on the toolhead, connected over UART.
+// The CH32V003 owns: thermistor ADC (10-bit, replicated circuit), heater PWM
+// (1 Hz slow PWM), part cooling fan PWM, BLTouch servo, heatsink fan (local
+// raw-ADC rule), hotend LED (local), and X/Z/BLTouch endstop inputs.
+// Marlin keeps PID, thermal runaway, autotune, and all thermistor math.
+// See plan.md for the full protocol contract.
+//#define SMARTHOTEND_ENABLED
+#if ENABLED(SMARTHOTEND_ENABLED)
+  #define SMARTHOTEND_SERIAL_PORT 2      // USART2 on ATmega2560 (PH0/PH1). Must differ from SERIAL_PORT.
+  #define SMARTHOTEND_BAUD 115200        // UART baud rate to the CH32V003
+  #define SMARTHOTEND_HEATER 0           // Which hotend this drives (TEMP_SENSOR_0 stays as-is)
+  #define SMARTHOTEND_HEARTBEAT_MS 1000  // Re-send command frame at this interval when idle
+  #define SMARTHOTEND_WATCHDOG_MS 1000   // Flag a fault if no telemetry for this long
+#endif
+
 // Use temp sensor 1 as a redundant sensor with sensor 0. If the readings
 // from the two sensors differ too much the print will be aborted.
 //#define TEMP_SENSOR_1_AS_REDUNDANT

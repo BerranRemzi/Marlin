@@ -1678,6 +1678,39 @@ static_assert(hbm[Z_AXIS] >= 0, "HOMING_BUMP_MM.Z must be greater than or equal 
 #endif
 
 /**
+ * Smart Hotend (CH32V003 over UART) validation
+ */
+#if ENABLED(SMARTHOTEND_ENABLED)
+  #if !defined(SMARTHOTEND_SERIAL_PORT) || !WITHIN(SMARTHOTEND_SERIAL_PORT, 0, 3)
+    #error "SMARTHOTEND_SERIAL_PORT must be from 0 to 3. Please update your Configuration.h."
+  #endif
+  #if SMARTHOTEND_SERIAL_PORT == SERIAL_PORT
+    #error "SMARTHOTEND_SERIAL_PORT must not be the same as SERIAL_PORT."
+  #endif
+  #ifdef SERIAL_PORT_2
+    #if SMARTHOTEND_SERIAL_PORT == SERIAL_PORT_2
+      #error "SMARTHOTEND_SERIAL_PORT must not be the same as SERIAL_PORT_2."
+    #endif
+  #endif
+  #ifdef MMU2_SERIAL_PORT
+    #if SMARTHOTEND_SERIAL_PORT == MMU2_SERIAL_PORT
+      #error "SMARTHOTEND_SERIAL_PORT must not be the same as MMU2_SERIAL_PORT."
+    #endif
+  #endif
+  #ifdef LCD_SERIAL_PORT
+    #if SMARTHOTEND_SERIAL_PORT == LCD_SERIAL_PORT
+      #error "SMARTHOTEND_SERIAL_PORT must not be the same as LCD_SERIAL_PORT."
+    #endif
+  #endif
+  #if SMARTHOTEND_HEATER >= HOTENDS
+    #error "SMARTHOTEND_HEATER must be less than HOTENDS."
+  #endif
+  #if TEMP_SENSOR_0 == 0 && SMARTHOTEND_HEATER == 0
+    #error "TEMP_SENSOR_0 must be set (non-zero) when SMARTHOTEND_HEATER is 0. The CH32V003 replicates the thermistor circuit; set TEMP_SENSOR_0 to the matching NTC type (e.g. 1 for EPCOS 100K)."
+  #endif
+#endif
+
+/**
  * A Sensor ID has to be set for each heater
  */
 

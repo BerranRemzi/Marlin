@@ -32,6 +32,10 @@ bool BLTouch::last_written_mode; // Initialized by settings.load, 0 = Open Drain
 
 #include "../module/servo.h"
 
+#if HAS_SMARTHOTEND
+  #include "smarthotend/SmartHotend.h"
+#endif
+
 void stop();
 
 #define DEBUG_OUT ENABLED(DEBUG_LEVELING_FEATURE)
@@ -39,7 +43,20 @@ void stop();
 
 bool BLTouch::command(const BLTCommand cmd, const millis_t &ms) {
   if (DEBUGGING(LEVELING)) SERIAL_ECHOLNPAIR("BLTouch Command :", cmd);
-  MOVE_SERVO(Z_PROBE_SERVO_NR, cmd);
+  #if HAS_SMARTHOTEND
+    // Route the BLTouch command to the CH32V003 over UART.
+    // Map BLTouch servo angles to SmartHotend BL_CMD codes.
+    uint8_t sh_cmd = SH_BL_IDLE;
+    if (cmd == BLTOUCH_DEPLOY)       sh_cmd = SH_BL_DEPLOY;
+    else if (cmd == BLTOUCH_STOW)    sh_cmd = SH_BL_STOW;
+    else if (cmd == BLTOUCH_RESET)   sh_cmd = SH_BL_PULSE_TEST;  // RESET ≈ pulse
+    #if ENABLED(BLTOUCH_HS_MODE)
+      else if (cmd == 90)            sh_cmd = SH_BL_SELF_TEST;   // self-test
+    #endif
+    SmartHotend::setBLTouchCommand(sh_cmd);
+  #else
+    MOVE_SERVO(Z_PROBE_SERVO_NR, cmd);
+  #endif
   safe_delay(_MAX(ms, (uint32_t)BLTOUCH_DELAY)); // BLTOUCH_DELAY is also the *minimum* delay
   return triggered();
 }
@@ -91,13 +108,17 @@ void BLTouch::clear() {
 }
 
 bool BLTouch::triggered() {
-  return (
-    #if ENABLED(Z_MIN_PROBE_USES_Z_MIN_ENDSTOP_PIN)
-      READ(Z_MIN_PIN) != Z_MIN_ENDSTOP_INVERTING
-    #else
-      READ(Z_MIN_PROBE_PIN) != Z_MIN_PROBE_ENDSTOP_INVERTING
-    #endif
-  );
+  #if HAS_SMARTHOTEND
+    return SmartHotend::bltouchTriggered();
+  #else
+    return (
+      #if ENABLED(Z_MIN_PROBE_USES_Z_MIN_ENDSTOP_PIN)
+        READ(Z_MIN_PIN) != Z_MIN_ENDSTOP_INVERTING
+      #else
+        READ(Z_MIN_PROBE_PIN) != Z_MIN_PROBE_ENDSTOP_INVERTING
+      #endif
+    );
+  #endif
 }
 
 bool BLTouch::deploy_proc() {

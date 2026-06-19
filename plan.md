@@ -315,19 +315,19 @@ Add validation:
 - **Phase 1 complete — all contract decisions resolved.**
 
 ### Phase 2 — Marlin `SmartHotend` class + wiring (main goal of this plan)
-- [ ] Create `Marlin/src/feature/smarthotend/SmartHotend.{h,cpp}`.
-- [ ] UART RX/TX ring buffer + interrupt driver on USART2.
-- [ ] Telemetry parser + CRC8 + cache.
-- [ ] Command assembler + event-driven TX + 1 s heartbeat.
-- [ ] Comms watchdog + fault flag.
-- [ ] `init()` / `tick()`.
-- [ ] `Configuration.h` / `Configuration_adv.h` options.
-- [ ] `temperature.cpp`: raw injection, ADC skip, heater PWM route, `tick()` call.
-- [ ] `endstops.cpp`: X-min + Z-min + BLTouch trigger reads.
-- [ ] `bltouch.cpp`: deploy/stow/pulse route.
-- [ ] Fan write path: part fan route.
-- [ ] `SanityCheck.h` validation.
-- [ ] `Conditionals_post.h` / `Conditionals_LCD.h` feature flag plumbing.
+- [x] Create `Marlin/src/feature/smarthotend/SmartHotend.{h,cpp}`.
+- [x] UART RX/TX ring buffer + interrupt driver on USART2.
+- [x] Telemetry parser + CRC8 + cache.
+- [x] Command assembler + event-driven TX + 1 s heartbeat.
+- [x] Comms watchdog + fault flag.
+- [x] `init()` / `tick()`.
+- [x] `Configuration.h` / `Configuration_adv.h` options.
+- [x] `temperature.cpp`: raw injection, ADC skip, heater PWM route, `tick()` call.
+- [x] `endstops.cpp`: X-min + Z-min + BLTouch trigger reads.
+- [x] `bltouch.cpp`: deploy/stow/pulse route.
+- [x] Fan write path: part fan route.
+- [x] `SanityCheck.h` validation.
+- [x] `Conditionals_post.h` / `MarlinSerial.h` / `MarlinSerial.cpp` feature flag + HAL serial plumbing.
 
 ### Phase 3 — CH32v003 firmware (separate repository, user-created)
 - [ ] Create separate repo for CH32v003 hotend firmware.

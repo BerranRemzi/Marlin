@@ -1742,6 +1742,29 @@
 #define HAS_TEMP_PROBE      HAS_TEMP_ADC_PROBE
 #define HAS_TEMP_CHAMBER    HAS_TEMP_ADC_CHAMBER
 
+// Smart Hotend (CH32V003 over UART)
+#if ENABLED(SMARTHOTEND_ENABLED)
+  #define HAS_SMARTHOTEND 1
+  #ifndef SMARTHOTEND_SERIAL_PORT
+    #define SMARTHOTEND_SERIAL_PORT 2
+  #endif
+  #ifndef SMARTHOTEND_BAUD
+    #define SMARTHOTEND_BAUD 115200
+  #endif
+  #ifndef SMARTHOTEND_HEATER
+    #define SMARTHOTEND_HEATER 0
+  #endif
+  #ifndef SMARTHOTEND_HEARTBEAT_MS
+    #define SMARTHOTEND_HEARTBEAT_MS 1000
+  #endif
+  #ifndef SMARTHOTEND_WATCHDOG_MS
+    #define SMARTHOTEND_WATCHDOG_MS 1000
+  #endif
+  #if defined(__AVR__) && !defined(SMARTHOTEND_SERIAL)
+    #define SMARTHOTEND_SERIAL smartHotendSerial
+  #endif
+#endif
+
 #if ENABLED(JOYSTICK)
   #if PIN_EXISTS(JOY_X)
     #define HAS_JOY_ADC_X 1
@@ -2118,6 +2141,13 @@
   #define WRITE_HEATER_0(v) { WRITE_HEATER_0P(v); WRITE_HEATER_1(v); }
 #else
   #define WRITE_HEATER_0(v) WRITE_HEATER_0P(v)
+#endif
+
+// When SmartHotend drives hotend 0, suppress local heater pin writes —
+// the heater is controlled over UART by the CH32V003.
+#if HAS_SMARTHOTEND && SMARTHOTEND_HEATER == 0
+  #undef WRITE_HEATER_0
+  #define WRITE_HEATER_0(v) NOOP
 #endif
 
 #ifndef MIN_POWER

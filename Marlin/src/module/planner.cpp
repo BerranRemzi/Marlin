@@ -103,6 +103,10 @@
   #include "../feature/cancel_object.h"
 #endif
 
+#if HAS_SMARTHOTEND
+  #include "../feature/smarthotend/SmartHotend.h"
+#endif
+
 #if ENABLED(POWER_LOSS_RECOVERY)
   #include "../feature/powerloss.h"
 #endif
@@ -1379,6 +1383,12 @@ void Planner::check_axes_activity() {
       #define _FAN_SET(F) analogWrite(pin_t(FAN##F##_PIN), CALC_FAN_SPEED(F));
     #endif
     #define FAN_SET(F) do{ KICKSTART_FAN(F); _FAN_SET(F); }while(0)
+
+    #if HAS_SMARTHOTEND
+      // Fan 0 is on the CH32V003 — route over UART instead of local pin.
+      #undef FAN_SET
+      #define FAN_SET(F) do{ if (F == 0) SmartHotend::setPartFanPWM(CALC_FAN_SPEED(F)); else { KICKSTART_FAN(F); _FAN_SET(F); } }while(0)
+    #endif
 
     TERN_(HAS_FAN0, FAN_SET(0));
     TERN_(HAS_FAN1, FAN_SET(1));

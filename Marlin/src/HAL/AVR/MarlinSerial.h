@@ -297,6 +297,23 @@
   extern MarlinSerial<MMU2SerialCfg<MMU2_SERIAL_PORT>> mmuSerial;
 #endif
 
+#ifdef SMARTHOTEND_SERIAL_PORT
+  template <uint8_t serial>
+  struct SmartHotendSerialCfg {
+    static constexpr int PORT               = serial;
+    static constexpr bool XONOFF            = false;
+    static constexpr bool EMERGENCYPARSER   = false;
+    static constexpr bool DROPPED_RX        = false;
+    static constexpr bool RX_FRAMING_ERRORS = false;
+    static constexpr bool MAX_RX_QUEUED     = false;
+    static constexpr unsigned int RX_SIZE   = 32;
+    static constexpr unsigned int TX_SIZE   = 32;
+    static constexpr bool RX_OVERRUNS       = false;
+  };
+
+  extern MarlinSerial<SmartHotendSerialCfg<SMARTHOTEND_SERIAL_PORT>> smartHotendSerial;
+#endif
+
 #ifdef LCD_SERIAL_PORT
 
   template <uint8_t serial>

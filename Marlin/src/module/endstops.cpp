@@ -48,6 +48,10 @@
   #include "../feature/joystick.h"
 #endif
 
+#if HAS_SMARTHOTEND
+  #include "../feature/smarthotend/SmartHotend.h"
+#endif
+
 Endstops endstops;
 
 // private:
@@ -407,7 +411,11 @@ void _O2 Endstops::report_states() {
   SERIAL_ECHOLNPGM(STR_M119_REPORT);
   #define ES_REPORT(S) print_es_state(READ(S##_PIN) != S##_ENDSTOP_INVERTING, PSTR(STR_##S))
   #if HAS_X_MIN
-    ES_REPORT(X_MIN);
+    #if HAS_SMARTHOTEND
+      print_es_state(SmartHotend::xEndstopTriggered(), PSTR(STR_X_MIN));
+    #else
+      ES_REPORT(X_MIN);
+    #endif
   #endif
   #if HAS_X2_MIN
     ES_REPORT(X2_MIN);
@@ -431,7 +439,11 @@ void _O2 Endstops::report_states() {
     ES_REPORT(Y2_MAX);
   #endif
   #if HAS_Z_MIN
-    ES_REPORT(Z_MIN);
+    #if HAS_SMARTHOTEND
+      print_es_state(SmartHotend::zEndstopTriggered(), PSTR(STR_Z_MIN));
+    #else
+      ES_REPORT(Z_MIN);
+    #endif
   #endif
   #if HAS_Z2_MIN
     ES_REPORT(Z2_MIN);
@@ -455,7 +467,11 @@ void _O2 Endstops::report_states() {
     ES_REPORT(Z4_MAX);
   #endif
   #if HAS_CUSTOM_PROBE_PIN
-    print_es_state(READ(Z_MIN_PROBE_PIN) != Z_MIN_PROBE_ENDSTOP_INVERTING, PSTR(STR_Z_PROBE));
+    #if HAS_SMARTHOTEND
+      print_es_state(SmartHotend::bltouchTriggered(), PSTR(STR_Z_PROBE));
+    #else
+      print_es_state(READ(Z_MIN_PROBE_PIN) != Z_MIN_PROBE_ENDSTOP_INVERTING, PSTR(STR_Z_PROBE));
+    #endif
   #endif
   #if HAS_FILAMENT_SENSOR
     #if NUM_RUNOUT_SENSORS == 1
@@ -500,7 +516,11 @@ void Endstops::update() {
 
   #if ENABLED(G38_PROBE_TARGET) && PIN_EXISTS(Z_MIN_PROBE) && NONE(CORE_IS_XY, CORE_IS_XZ, MARKFORGED_XY)
     // If G38 command is active check Z_MIN_PROBE for ALL movement
-    if (G38_move) UPDATE_ENDSTOP_BIT(Z, MIN_PROBE);
+    #if HAS_SMARTHOTEND
+      if (G38_move) SET_BIT_TO(live_state, _ENDSTOP(Z, MIN_PROBE), SmartHotend::bltouchTriggered());
+    #else
+      if (G38_move) UPDATE_ENDSTOP_BIT(Z, MIN_PROBE);
+    #endif
   #endif
 
   // With Dual X, endstops are only checked in the homing direction for the active extruder
@@ -534,7 +554,11 @@ void Endstops::update() {
    * Check and update endstops
    */
   #if HAS_X_MIN && !X_SPI_SENSORLESS
-    UPDATE_ENDSTOP_BIT(X, MIN);
+    #if HAS_SMARTHOTEND
+      SET_BIT_TO(live_state, _ENDSTOP(X, MIN), SmartHotend::xEndstopTriggered());
+    #else
+      UPDATE_ENDSTOP_BIT(X, MIN);
+    #endif
     #if ENABLED(X_DUAL_ENDSTOPS)
       #if HAS_X2_MIN
         UPDATE_ENDSTOP_BIT(X2, MIN);
@@ -578,7 +602,11 @@ void Endstops::update() {
   #endif
 
   #if HAS_Z_MIN && !Z_SPI_SENSORLESS
-    UPDATE_ENDSTOP_BIT(Z, MIN);
+    #if HAS_SMARTHOTEND
+      SET_BIT_TO(live_state, _ENDSTOP(Z, MIN), SmartHotend::zEndstopTriggered());
+    #else
+      UPDATE_ENDSTOP_BIT(Z, MIN);
+    #endif
     #if ENABLED(Z_MULTI_ENDSTOPS)
       #if HAS_Z2_MIN
         UPDATE_ENDSTOP_BIT(Z2, MIN);

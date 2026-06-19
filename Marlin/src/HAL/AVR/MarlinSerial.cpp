@@ -763,6 +763,24 @@ MarlinSerial<MarlinSerialCfg<SERIAL_PORT>> customizedSerial1;
 
 #endif
 
+#ifdef SMARTHOTEND_SERIAL_PORT
+
+  ISR(SERIAL_REGNAME(USART, SMARTHOTEND_SERIAL_PORT, _RX_vect)) {
+    MarlinSerial<SmartHotendSerialCfg<SMARTHOTEND_SERIAL_PORT>>::store_rxd_char();
+  }
+
+  ISR(SERIAL_REGNAME(USART, SMARTHOTEND_SERIAL_PORT, _UDRE_vect)) {
+    MarlinSerial<SmartHotendSerialCfg<SMARTHOTEND_SERIAL_PORT>>::_tx_udr_empty_irq();
+  }
+
+  // Preinstantiate
+  template class MarlinSerial<SmartHotendSerialCfg<SMARTHOTEND_SERIAL_PORT>>;
+
+  // Instantiate
+  MarlinSerial<SmartHotendSerialCfg<SMARTHOTEND_SERIAL_PORT>> smartHotendSerial;
+
+#endif
+
 #ifdef LCD_SERIAL_PORT
 
   ISR(SERIAL_REGNAME(USART, LCD_SERIAL_PORT, _RX_vect)) {

@@ -103,6 +103,10 @@
   #include "../feature/joystick.h"
 #endif
 
+#if HAS_SMARTHOTEND
+  #include "../feature/smarthotend/SmartHotend.h"
+#endif
+
 #if ENABLED(SINGLENOZZLE)
   #include "tool_change.h"
 #endif
@@ -1068,6 +1072,10 @@ void Temperature::manage_heater() {
 
       temp_hotend[e].soft_pwm_amount = (temp_hotend[e].celsius > temp_range[e].mintemp || is_preheating(e)) && temp_hotend[e].celsius < temp_range[e].maxtemp ? (int)get_pid_output_hotend(e) >> 1 : 0;
 
+      #if HAS_SMARTHOTEND
+        if (e == SMARTHOTEND_HEATER) SmartHotend::setHeaterPWM(temp_hotend[e].soft_pwm_amount);
+      #endif
+
       #if WATCH_HOTENDS
         // Make sure temperature is increasing
         if (watch_hotend[e].next_ms && ELAPSED(ms, watch_hotend[e].next_ms)) {  // Time to check this extruder?
@@ -1622,6 +1630,9 @@ void Temperature::manage_heater() {
  * as it would block the stepper routine.
  */
 void Temperature::updateTemperaturesFromRawValues() {
+  #if HAS_SMARTHOTEND
+    temp_hotend[SMARTHOTEND_HEATER].raw = SmartHotend::readRawADC();
+  #endif
   #if ENABLED(HEATER_0_USES_MAX6675)
     temp_hotend[0].raw = READ_MAX6675(0);
   #endif
@@ -1685,6 +1696,8 @@ void Temperature::updateTemperaturesFromRawValues() {
 void Temperature::init() {
 
   TERN_(MAX6675_IS_MAX31865, max31865.begin(MAX31865_2WIRE)); // MAX31865_2WIRE, MAX31865_3WIRE, MAX31865_4WIRE
+
+  TERN_(HAS_SMARTHOTEND, SmartHotend::init()); // Start UART to CH32V003 hotend expander
 
   #if EARLY_WATCHDOG
     // Flag that the thermalManager should be running
@@ -2367,6 +2380,13 @@ void Temperature::readings_ready() {
   // Filament Sensor - can be read any time since IIR filtering is used
   TERN_(FILAMENT_WIDTH_SENSOR, filwidth.reading_ready());
 
+  #if HAS_SMARTHOTEND
+    // Drive the UART exchange: parse incoming telemetry, send commands/heartbeat.
+    SmartHotend::tick();
+    // Comms-loss watchdog: if no telemetry for SMARTHOTEND_WATCHDOG_MS, fault.
+    if (!SmartHotend::commsOk()) max_temp_error((heater_id_t)SMARTHOTEND_HEATER);
+  #endif
+
   #if HAS_HOTEND
     HOTEND_LOOP() temp_hotend[e].reset();
     TERN_(TEMP_SENSOR_1_AS_REDUNDANT, temp_hotend[1].reset());
@@ -2557,7 +2577,7 @@ void Temperature::tick() {
           spcf = (spcf & pwm_mask) + (soft_pwm_amount_fan[N] >> 1); \
           WRITE_FAN(N, spcf > pwm_mask ? HIGH : LOW);               \
         }while(0)
-        #if HAS_FAN0
+        #if HAS_FAN0 && DISABLED(SMARTHOTEND_ENABLED)
           _FAN_PWM(0);
         #endif
         #if HAS_FAN1
@@ -2599,7 +2619,7 @@ void Temperature::tick() {
       #endif
 
       #if ENABLED(FAN_SOFT_PWM)
-        #if HAS_FAN0
+        #if HAS_FAN0 && DISABLED(SMARTHOTEND_ENABLED)
           if (soft_pwm_count_fan[0] <= pwm_count_tmp) WRITE_FAN(0, LOW);
         #endif
         #if HAS_FAN1
@@ -2810,7 +2830,7 @@ void Temperature::tick() {
       }
       break;
 
-    #if HAS_TEMP_ADC_0
+    #if HAS_TEMP_ADC_0 && DISABLED(SMARTHOTEND_ENABLED)
       case PrepareTemp_0: HAL_START_ADC(TEMP_0_PIN); break;
       case MeasureTemp_0: ACCUMULATE_ADC(temp_hotend[0]); break;
     #endif
