@@ -49,6 +49,9 @@
 #include "module/temperature.h"
 #include "module/settings.h"
 #include "module/printcounter.h" // PrintCounter or Stopwatch
+#if HAS_SMARTHOTEND
+  #include "feature/smarthotend/SmartHotend.h"
+#endif
 
 #include "module/stepper.h"
 #include "module/stepper/indirection.h"
@@ -692,6 +695,10 @@ inline void manage_inactivity(const bool ignore_stepper_queue=false) {
  *  - Handle Joystick jogging
  */
 void idle(TERN_(ADVANCED_PAUSE_FEATURE, bool no_stepper_sleep/*=false*/)) {
+
+  #if HAS_SMARTHOTEND
+    if (marlin_state != MF_INITIALIZING) SmartHotend::pollRx();
+  #endif
 
   // Core Marlin activities
   manage_inactivity(TERN_(ADVANCED_PAUSE_FEATURE, no_stepper_sleep));

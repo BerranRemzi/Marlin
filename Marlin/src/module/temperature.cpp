@@ -2381,7 +2381,7 @@ void Temperature::readings_ready() {
   TERN_(FILAMENT_WIDTH_SENSOR, filwidth.reading_ready());
 
   #if HAS_SMARTHOTEND
-    // Drive the UART exchange: parse incoming telemetry, send commands/heartbeat.
+    // Send commands/heartbeat; telemetry parsing runs from idle().
     SmartHotend::tick();
     // Comms-loss watchdog: if no telemetry for SMARTHOTEND_WATCHDOG_MS, fault.
     if (!SmartHotend::commsOk()) max_temp_error((heater_id_t)SMARTHOTEND_HEATER);

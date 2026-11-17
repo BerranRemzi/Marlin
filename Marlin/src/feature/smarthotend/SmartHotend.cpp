@@ -83,14 +83,18 @@ void SmartHotend::init() {
 }
 
 // --------------------------------------------------------------------------
-// tick() — called from the Temperature ISR. Non-blocking.
-//   1. Drain completed telemetry frames from the RX ring buffer.
-//   2. Send a command frame if dirty or if the 1 s heartbeat is due.
+// pollRx() — drain telemetry in foreground context, called from idle().
+// --------------------------------------------------------------------------
+
+void SmartHotend::pollRx() {
+  parseTelemetry();
+}
+
+// --------------------------------------------------------------------------
+// tick() — called from the Temperature ISR. Non-blocking command TX only.
 // --------------------------------------------------------------------------
 
 void SmartHotend::tick() {
-  parseTelemetry();
-
   const millis_t now = millis();
 
   // Send a command frame when a field changed, or as a 1 s heartbeat.
@@ -133,10 +137,13 @@ void SmartHotend::parseTelemetry() {
 
     // --- Decode telemetry ---
     const uint16_t adc = ((uint16_t)rx_buf[1] << 2) | ((rx_buf[2] >> 6) & 0x03);
-    raw_adc       = adc;
-    endstop_flags = rx_buf[3];
-    status        = rx_buf[4];
-    last_tlm_ms   = millis();
+    const millis_t received_ms = millis();
+    CRITICAL_SECTION_START();
+      raw_adc       = adc;
+      endstop_flags = rx_buf[3];
+      status        = rx_buf[4];
+      last_tlm_ms   = received_ms;
+    CRITICAL_SECTION_END();
   }
 }
 
@@ -147,7 +154,11 @@ void SmartHotend::parseTelemetry() {
 // --------------------------------------------------------------------------
 
 uint16_t SmartHotend::readRawADC() {
-  return (uint16_t)raw_adc * (uint16_t)OVERSAMPLENR;
+  uint16_t adc;
+  CRITICAL_SECTION_START();
+    adc = raw_adc;
+  CRITICAL_SECTION_END();
+  return adc * (uint16_t)OVERSAMPLENR;
 }
 
 // --------------------------------------------------------------------------
@@ -172,7 +183,11 @@ void SmartHotend::setBLTouchCommand(uint8_t cmd)  { if (cmd != cmd_bl_cmd)     {
 // --------------------------------------------------------------------------
 
 bool SmartHotend::commsOk() {
-  return (millis() - last_tlm_ms) < (millis_t)SMARTHOTEND_WATCHDOG_MS;
+  millis_t last;
+  CRITICAL_SECTION_START();
+    last = last_tlm_ms;
+  CRITICAL_SECTION_END();
+  return (millis() - last) < (millis_t)SMARTHOTEND_WATCHDOG_MS;
 }
 
 // --------------------------------------------------------------------------

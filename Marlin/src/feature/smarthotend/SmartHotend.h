@@ -35,7 +35,7 @@
  * See plan.md for the full protocol contract.
  *
  * Protocol (async streaming + event-driven commands + 1 s heartbeat):
- *   Telemetry (CH32V003 → Marlin, 6 bytes, 250 Hz):
+ *   Telemetry (CH32V003 → Marlin, 6 bytes, 20 Hz + endstop changes):
  *     [0x55] [ADC_HI] [ADC_LO] [ENDSTOP_FLAGS] [STATUS] [CRC8]
  *   Command (Marlin → CH32V003, 5 bytes, event-driven + 1 s heartbeat):
  *     [0xAA] [HEATER_PWM] [PFAN_PWM] [BL_CMD] [CRC8]
@@ -79,9 +79,12 @@ class SmartHotend {
     // Setup USART, pins, buffers. Call once at boot.
     static void init();
 
-    // Called from the Temperature ISR (non-blocking). Parses any completed
-    // telemetry frames from the RX ring buffer, updates the telemetry cache,
-    // and sends command frames when needed (event-driven or heartbeat).
+    // Called from idle() in foreground context to drain the UART RX buffer.
+    // Keep this as the only caller that parses telemetry.
+    static void pollRx();
+
+    // Called from the Temperature ISR. Sends command frames when needed
+    // (event-driven or heartbeat).
     static void tick();
 
     // Latest thermistor raw value in Marlin's accumulated-ADC units.
