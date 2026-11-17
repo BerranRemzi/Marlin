@@ -50,6 +50,7 @@ bool BLTouch::command(const BLTCommand cmd, const millis_t &ms) {
     if (cmd == BLTOUCH_DEPLOY)       sh_cmd = SH_BL_DEPLOY;
     else if (cmd == BLTOUCH_STOW)    sh_cmd = SH_BL_STOW;
     else if (cmd == BLTOUCH_RESET)   sh_cmd = SH_BL_PULSE_TEST;  // RESET ≈ pulse
+    else if (cmd == BLTOUCH_SELFTEST) sh_cmd = SH_BL_SELF_TEST;
     #if ENABLED(BLTOUCH_HS_MODE)
       else if (cmd == 90)            sh_cmd = SH_BL_SELF_TEST;   // self-test
     #endif
