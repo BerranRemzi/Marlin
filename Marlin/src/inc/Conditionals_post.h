@@ -1763,6 +1763,12 @@
   #if defined(__AVR__) && !defined(SMARTHOTEND_SERIAL)
     #define SMARTHOTEND_SERIAL smartHotendSerial
   #endif
+  // Endstop/probe routing: only when the endstops are physically on the
+  // CH32V003 (SMARTHOTEND_ENDSTOPS). Otherwise they stay on main-board
+  // plugs and Marlin reads them directly.
+  #if ENABLED(SMARTHOTEND_ENDSTOPS)
+    #define HAS_SMARTHOTEND_ENDSTOPS 1
+  #endif
 #endif
 
 #if ENABLED(JOYSTICK)
@@ -2147,7 +2153,7 @@
 // the heater is controlled over UART by the CH32V003.
 #if HAS_SMARTHOTEND && SMARTHOTEND_HEATER == 0
   #undef WRITE_HEATER_0
-  #define WRITE_HEATER_0(v) NOOP
+  #define WRITE_HEATER_0(v) UNUSED(v)
 #endif
 
 #ifndef MIN_POWER

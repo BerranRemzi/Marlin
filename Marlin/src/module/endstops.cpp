@@ -411,7 +411,7 @@ void _O2 Endstops::report_states() {
   SERIAL_ECHOLNPGM(STR_M119_REPORT);
   #define ES_REPORT(S) print_es_state(READ(S##_PIN) != S##_ENDSTOP_INVERTING, PSTR(STR_##S))
   #if HAS_X_MIN
-    #if HAS_SMARTHOTEND
+    #if HAS_SMARTHOTEND_ENDSTOPS
       print_es_state(SmartHotend::xEndstopTriggered(), PSTR(STR_X_MIN));
     #else
       ES_REPORT(X_MIN);
@@ -439,7 +439,7 @@ void _O2 Endstops::report_states() {
     ES_REPORT(Y2_MAX);
   #endif
   #if HAS_Z_MIN
-    #if HAS_SMARTHOTEND
+    #if HAS_SMARTHOTEND_ENDSTOPS
       print_es_state(SmartHotend::zEndstopTriggered(), PSTR(STR_Z_MIN));
     #else
       ES_REPORT(Z_MIN);
@@ -467,7 +467,7 @@ void _O2 Endstops::report_states() {
     ES_REPORT(Z4_MAX);
   #endif
   #if HAS_CUSTOM_PROBE_PIN
-    #if HAS_SMARTHOTEND
+    #if HAS_SMARTHOTEND_ENDSTOPS
       print_es_state(SmartHotend::bltouchTriggered(), PSTR(STR_Z_PROBE));
     #else
       print_es_state(READ(Z_MIN_PROBE_PIN) != Z_MIN_PROBE_ENDSTOP_INVERTING, PSTR(STR_Z_PROBE));
@@ -516,7 +516,7 @@ void Endstops::update() {
 
   #if ENABLED(G38_PROBE_TARGET) && PIN_EXISTS(Z_MIN_PROBE) && NONE(CORE_IS_XY, CORE_IS_XZ, MARKFORGED_XY)
     // If G38 command is active check Z_MIN_PROBE for ALL movement
-    #if HAS_SMARTHOTEND
+    #if HAS_SMARTHOTEND_ENDSTOPS
       if (G38_move) SET_BIT_TO(live_state, _ENDSTOP(Z, MIN_PROBE), SmartHotend::bltouchTriggered());
     #else
       if (G38_move) UPDATE_ENDSTOP_BIT(Z, MIN_PROBE);
@@ -554,7 +554,7 @@ void Endstops::update() {
    * Check and update endstops
    */
   #if HAS_X_MIN && !X_SPI_SENSORLESS
-    #if HAS_SMARTHOTEND
+    #if HAS_SMARTHOTEND_ENDSTOPS
       SET_BIT_TO(live_state, _ENDSTOP(X, MIN), SmartHotend::xEndstopTriggered());
     #else
       UPDATE_ENDSTOP_BIT(X, MIN);
@@ -602,7 +602,7 @@ void Endstops::update() {
   #endif
 
   #if HAS_Z_MIN && !Z_SPI_SENSORLESS
-    #if HAS_SMARTHOTEND
+    #if HAS_SMARTHOTEND_ENDSTOPS
       SET_BIT_TO(live_state, _ENDSTOP(Z, MIN), SmartHotend::zEndstopTriggered());
     #else
       UPDATE_ENDSTOP_BIT(Z, MIN);

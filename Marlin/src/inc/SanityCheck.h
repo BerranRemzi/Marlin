@@ -1708,6 +1708,9 @@ static_assert(hbm[Z_AXIS] >= 0, "HOMING_BUMP_MM.Z must be greater than or equal 
   #if TEMP_SENSOR_0 == 0 && SMARTHOTEND_HEATER == 0
     #error "TEMP_SENSOR_0 must be set (non-zero) when SMARTHOTEND_HEATER is 0. The CH32V003 replicates the thermistor circuit; set TEMP_SENSOR_0 to the matching NTC type (e.g. 1 for EPCOS 100K)."
   #endif
+  #if ENABLED(SMARTHOTEND_ENDSTOPS) && NONE(HAS_X_MIN, HAS_Z_MIN, HAS_CUSTOM_PROBE_PIN)
+    #error "SMARTHOTEND_ENDSTOPS is enabled but no X-min, Z-min or probe input is in use. Enable the matching endstop/probe plugs in Configuration.h."
+  #endif
 #endif
 
 /**

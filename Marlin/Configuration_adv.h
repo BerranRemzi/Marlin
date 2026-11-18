@@ -473,8 +473,15 @@
  *
  * Multiple extruders can be assigned to the same pin in which case
  * the fan will turn on when any selected extruder is above the threshold.
+ *
+ * NOTE: The E0 heatsink fan is owned by the Smart Hotend CH32V003 (local
+ * raw-ADC rule). Keep E0_AUTO_FAN_PIN at -1 so Marlin doesn't drive it.
  */
-#define E0_AUTO_FAN_PIN 6
+#if ENABLED(SMARTHOTEND_ENABLED)
+  #define E0_AUTO_FAN_PIN -1
+#else
+  #define E0_AUTO_FAN_PIN 6
+#endif
 #define E1_AUTO_FAN_PIN -1
 #define E2_AUTO_FAN_PIN -1
 #define E3_AUTO_FAN_PIN -1

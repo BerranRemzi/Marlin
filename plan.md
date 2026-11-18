@@ -242,9 +242,9 @@ class SmartHotend {
   #define SMARTHOTEND_SERIAL_PORT 2      // USART2 on ATmega2560
   #define SMARTHOTEND_BAUD 115200
   #define SMARTHOTEND_HEATER 0           // which hotend this drives
-  #define SMARTHOTEND_TEMP_SENSOR 1      // thermistor type for analog_to_celsius_hotend
   #define SMARTHOTEND_HEARTBEAT_MS 1000
   #define SMARTHOTEND_WATCHDOG_MS 1000
+  //#define SMARTHOTEND_ENDSTOPS        // X/Z endstops + BLTouch are on the CH32V003 (default: main-board plugs)
 #endif
 ```
 
@@ -281,12 +281,24 @@ The MAX6675 is the existing model for "external temp source injects raw value":
 
 ### 5.4 Endstop / BLTouch integration
 
-- In `endstops.cpp`, when `SMARTHOTEND_ENABLED`, the toolhead-mounted endstops pull from the SmartHotend telemetry cache instead of local GPIO reads:
+> **Deployment status:** in the current printer the endstops and the BLTouch stay wired
+> to the **main board** — the SmartHotend endstop/BLTouch routing below is disabled by
+> default and gated behind a separate opt-in `SMARTHOTEND_ENDSTOPS` (in
+> `Configuration.h`, inside the `SMARTHOTEND_ENABLED` block). Use it only if the
+> endstops/probe are physically moved to the CH32V003.
+
+- In `endstops.cpp`, when `HAS_SMARTHOTEND_ENDSTOPS` (not merely `SMARTHOTEND_ENABLED`),
+  the toolhead-mounted endstops pull from the SmartHotend telemetry cache instead of local GPIO reads:
   - **Z-min** (bed level / mechanical): `SmartHotend::zEndstopTriggered()` instead of `READ(Z_MIN_PIN)`.
   - **X-min** (toolhead strikes X=0 stop): `SmartHotend::xEndstopTriggered()` instead of `READ(X_MIN_PIN)`.
   - **BLTouch probe trigger**: `SmartHotend::bltouchTriggered()` instead of `READ(Z_MIN_PROBE_PIN)`.
 - In `bltouch.cpp`, deploy/stow/pulse commands call `SmartHotend::setBLTouchCommand(...)` instead of servo writes.
-- The main board's `X_MIN_PIN`, `Z_MIN_PIN`, and `Z_MIN_PROBE_PIN` are left unused (not wired) when `SMARTHOTEND_ENABLED` — the CH32v003 owns those inputs on the toolhead.
+- With the default (`SMARTHOTEND_ENDSTOPS` off), the main board's `X_MIN_PIN`,
+  `Z_MIN_PIN`, and `Z_MIN_PROBE_PIN` keep working exactly as before — Marlin reads
+  them locally and the CH32V003 reports idle flags that nothing consumes.
+- The Marlin-side heatsink auto fan (`E0_AUTO_FAN_PIN`) is set to `-1` while
+  `SMARTHOTEND_ENABLED`: the heatsink fan is owned by the CH32V003's local raw-ADC
+  rule, and Marlin must never drive that fan pin.
 
 ### 5.5 SanityCheck.h
 

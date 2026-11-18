@@ -2833,6 +2833,11 @@ void Temperature::tick() {
     #if HAS_TEMP_ADC_0 && DISABLED(SMARTHOTEND_ENABLED)
       case PrepareTemp_0: HAL_START_ADC(TEMP_0_PIN); break;
       case MeasureTemp_0: ACCUMULATE_ADC(temp_hotend[0]); break;
+    #elif HAS_TEMP_ADC_0
+      // Hotend 0 temp arrives over the SmartHotend link, but keep the states:
+      // they preserve the ADC cycle length (ACTUAL_ADC_SAMPLES, the PID_dT
+      // basis the tuned gains were calibrated against).
+      case PrepareTemp_0: case MeasureTemp_0: break;
     #endif
 
     #if HAS_HEATED_BED

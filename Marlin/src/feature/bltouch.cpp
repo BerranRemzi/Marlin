@@ -32,7 +32,7 @@ bool BLTouch::last_written_mode; // Initialized by settings.load, 0 = Open Drain
 
 #include "../module/servo.h"
 
-#if HAS_SMARTHOTEND
+#if HAS_SMARTHOTEND_ENDSTOPS
   #include "smarthotend/SmartHotend.h"
 #endif
 
@@ -43,7 +43,7 @@ void stop();
 
 bool BLTouch::command(const BLTCommand cmd, const millis_t &ms) {
   if (DEBUGGING(LEVELING)) SERIAL_ECHOLNPAIR("BLTouch Command :", cmd);
-  #if HAS_SMARTHOTEND
+  #if HAS_SMARTHOTEND_ENDSTOPS
     // Route the BLTouch command to the CH32V003 over UART.
     // Map BLTouch servo angles to SmartHotend BL_CMD codes.
     uint8_t sh_cmd = SH_BL_IDLE;
@@ -109,7 +109,7 @@ void BLTouch::clear() {
 }
 
 bool BLTouch::triggered() {
-  #if HAS_SMARTHOTEND
+  #if HAS_SMARTHOTEND_ENDSTOPS
     return SmartHotend::bltouchTriggered();
   #else
     return (
