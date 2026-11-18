@@ -1711,6 +1711,9 @@ static_assert(hbm[Z_AXIS] >= 0, "HOMING_BUMP_MM.Z must be greater than or equal 
   #if ENABLED(SMARTHOTEND_ENDSTOPS) && NONE(HAS_X_MIN, HAS_Z_MIN, HAS_CUSTOM_PROBE_PIN)
     #error "SMARTHOTEND_ENDSTOPS is enabled but no X-min, Z-min or probe input is in use. Enable the matching endstop/probe plugs in Configuration.h."
   #endif
+  #if SMARTHOTEND_SERIAL_PORT == 3 && (Y_MIN_PIN == 14 || (ENABLED(USE_YMAX_PLUG) && Y_MAX_PIN == 15))
+    #error "SMARTHOTEND on USART3: D14/D15 are the UART (RAMPS Y-min/Y-max plugs). The Y-min endstop must be relocated (e.g. #define Y_MIN_PIN 2) and USE_YMAX_PLUG disabled."
+  #endif
 #endif
 
 /**

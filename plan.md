@@ -35,13 +35,14 @@ Replace the direct thermistor / heater PWM / part-fan / BLTouch / Z-endstop wiri
 
 ### 2.2 Main board (ATmega2560) side
 
-- **Use USART2** (`SMARTHOTEND_SERIAL_PORT 2`). Confirmed free in this config:
+- **Use USART3** (`SMARTHOTEND_SERIAL_PORT 3`). Occupancy in the final configuration:
   - USART0 = host serial (`SERIAL_PORT 0`). In use.
-  - USART1 = `MALYAN_LCD` only — disabled (`//#define MALYAN_LCD`). Free.
-  - USART2 = `PRUSA_MMU2` only — disabled (`//#define PRUSA_MMU2`). **Free → chosen.**
-  - USART3 = `ANYCUBIC_LCD` only — disabled. Free (spare).
-- On ATmega2560, USART2 is on pins **PH1 (TXD2)** and **PH0 (RXD2)** — check your board's pin mapping / AUX header for the physical pads.
-- UART pins on the main board: PH1 (TX) → CH32v003 RX (PC1), PH0 (RX) ← CH32v003 TX (PC0).
+  - USART1 = RAMPS Z-min/Z-max plugs (D18/D19) — **D18 carries the BLTouch trigger**; not free.
+  - USART2 = RepRapDiscount Smart Controller (LCD RS/EN on D16/D17); LCD in use — not free.
+  - USART3 = RAMPS Y-min/Y-max plugs (D14/D15) — **free after relocating the Y-min switch to the X-max block → chosen.**
+- On ATmega2560, USART3 is on pins **PJ1 = D15 (TXD3)** and **PJ0 = D14 (RXD3)**.
+- UART pins on the main board: **D15/Y-max plug (TX)** → CH32v003 RX (PC1), **D14/Y-min plug (RX)** ← CH32v003 TX (PC0).
+- Relocation required: `#define Y_MIN_PIN 2` in Configuration.h — the Y-min switch moves to the free X-max endstop block (D2). Y-max plug stays unused (its pad carries TX3).
 - **Baud: 115200** (plenty; 6-byte frame ≈ 0.5 ms wire time).
 - 4 wires in the toolhead cable: TX, RX, GND, +5V.
 
@@ -239,13 +240,17 @@ class SmartHotend {
 // Smart Hotend (CH32v003 over UART)
 #define SMARTHOTEND_ENABLED
 #if ENABLED(SMARTHOTEND_ENABLED)
-  #define SMARTHOTEND_SERIAL_PORT 2      // USART2 on ATmega2560
+  #define SMARTHOTEND_SERIAL_PORT 3      // USART3 on ATmega2560 (RX3=D14 / TX3=D15 on the
+                                         // RAMPS Y-min/Y-max plugs; Y-min endstop moved to X-MAX block)
   #define SMARTHOTEND_BAUD 115200
   #define SMARTHOTEND_HEATER 0           // which hotend this drives
   #define SMARTHOTEND_HEARTBEAT_MS 1000
   #define SMARTHOTEND_WATCHDOG_MS 1000
   //#define SMARTHOTEND_ENDSTOPS        // X/Z endstops + BLTouch are on the CH32V003 (default: main-board plugs)
 #endif
+
+// Endstop relocation required by the UART (see §2.2 note):
+#define Y_MIN_PIN 2                       // Y-min switch -> free X-MAX endstop block (D14/D15 carry USART3)
 ```
 
 `TEMP_SENSOR_0` stays at its current value (`1` = EPCOS 100K) — **no change needed**. The thermistor circuit is replicated on the hotend with the same NTC100, so raw ADC values are identical for a given temperature. Marlin still owns the thermistor table; the CH32v003 just sends raw ADC.

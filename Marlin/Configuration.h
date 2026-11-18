@@ -450,7 +450,7 @@
 // See plan.md for the full protocol contract.
 #define SMARTHOTEND_ENABLED
 #if ENABLED(SMARTHOTEND_ENABLED)
-  #define SMARTHOTEND_SERIAL_PORT 2      // USART2 on ATmega2560 (PH0/PH1). Must differ from SERIAL_PORT.
+  #define SMARTHOTEND_SERIAL_PORT 3      // USART3 on ATmega2560 (RX3=PJ0/D14, TX3=PJ1/D15 -> RAMPS Y-min/Y-max plug signals). Must differ from SERIAL_PORT.
   #define SMARTHOTEND_BAUD 115200        // UART baud rate to the CH32V003
   #define SMARTHOTEND_HEATER 0           // Which hotend this drives (TEMP_SENSOR_0 stays as-is)
   #define SMARTHOTEND_HEARTBEAT_MS 1000  // Re-send command frame at this interval when idle
@@ -647,6 +647,11 @@
 //#define USE_XMAX_PLUG
 //#define USE_YMAX_PLUG
 //#define USE_ZMAX_PLUG
+
+// The Y-min endstop is relocated off RAMPS D14 (and the Y-max plug stays unused):
+// D14/D15 carry USART3 for the Smart Hotend link. The Y-min switch plugs into the
+// free X-MAX endstop block (D2).
+#define Y_MIN_PIN 2
 
 // Enable pullup for all endstops to prevent a floating state
 #define ENDSTOPPULLUPS
