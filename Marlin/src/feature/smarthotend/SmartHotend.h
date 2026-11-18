@@ -83,8 +83,10 @@ class SmartHotend {
     // Keep this as the only caller that parses telemetry.
     static void pollRx();
 
-    // Called from the Temperature ISR. Sends command frames when needed
-    // (event-driven or heartbeat).
+    // Called from manage_heater() in foreground context (idle(), safe_delay()
+    // during blocking waits, planner.synchronize() during moves). Sends
+    // command frames when a field changed or the 1 s heartbeat is due — the
+    // only place serial writes happen, never from the Temperature ISR.
     static void tick();
 
     // Latest thermistor raw value in Marlin's accumulated-ADC units.
@@ -108,7 +110,7 @@ class SmartHotend {
     // Comms health: true if a valid telemetry frame was received recently.
     static bool commsOk();
 
-    // Force a command frame send now (event or heartbeat).
+    // Assemble and transmit a command frame. Foreground context only.
     static void sendCommand();
 
   private:
@@ -120,15 +122,14 @@ class SmartHotend {
     static volatile uint8_t  endstop_flags;  // Latest ENDSTOP_FLAGS byte
     static volatile uint8_t  status;         // Latest STATUS byte
 
-    // --- Outbound command cache ---
+    // --- Outbound command cache (foreground only: setters + TX) ---
     static uint8_t cmd_heater_pwm;
     static uint8_t cmd_pfan_pwm;
     static uint8_t cmd_bl_cmd;
-    static volatile bool cmd_dirty;          // True when a command field changed
+    static bool cmd_dirty;                   // True when a command field changed
 
     // --- Timing / watchdog ---
     static volatile millis_t last_tlm_ms;    // millis() of last valid telemetry
-    static volatile millis_t last_cmd_ms;    // millis() of last command sent
     static millis_t last_heartbeat_ms;       // millis() of last heartbeat send
 
     // --- RX frame parser state ---

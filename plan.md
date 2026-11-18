@@ -212,7 +212,7 @@ Class owns:
 class SmartHotend {
   public:
     static void init();              // setup USART, pins, buffers
-    static void tick();              // called from Temperature ISR; parse RX, update cache
+    static void tick();              // foreground command TX, called from manage_heater()
     static uint16_t readRawADC();    // latest thermistor raw (10-bit × OVERSAMPLENR → Marlin raw units)
     static bool zEndstopTriggered();
     static bool xEndstopTriggered();
@@ -275,7 +275,7 @@ The MAX6675 is the existing model for "external temp source injects raw value":
 
 4. **Part fan** — in fan write path, route to `SmartHotend::setPartFanPWM()`.
 
-5. **`tick()` call** — invoke `SmartHotend::tick()` from the temperature ISR (same place as `ACCUMULATE_ADC` / `readings_ready`), non-blocking.
+5. **`tick()` call** — invoke `SmartHotend::tick()` from `manage_heater()` (foreground: idle(), safe_delay() during blocking waits, planner.synchronize() during moves). Serial writes never happen in the Temperature ISR.
 
 6. **Comms fault** — if `!SmartHotend::commsOk()` for >1s, trigger `min_temp_error(H_E0)` / a `TempError` so Marlin halts (reuses existing fault machinery).
 

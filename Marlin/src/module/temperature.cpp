@@ -1043,6 +1043,13 @@ void Temperature::manage_heater() {
 
   updateTemperaturesFromRawValues(); // also resets the watchdog
 
+  #if HAS_SMARTHOTEND
+    // Send commands/heartbeat; telemetry parsing runs from idle().
+    // Comms-loss watchdog: if no telemetry for SMARTHOTEND_WATCHDOG_MS, fault.
+    if (!SmartHotend::commsOk()) max_temp_error((heater_id_t)SMARTHOTEND_HEATER);
+    else SmartHotend::tick();
+  #endif
+
   #if DISABLED(IGNORE_THERMOCOUPLE_ERRORS)
     #if ENABLED(HEATER_0_USES_MAX6675)
       if (temp_hotend[0].celsius > _MIN(HEATER_0_MAXTEMP, HEATER_0_MAX6675_TMAX - 1.0)) max_temp_error(H_E0);
@@ -2379,13 +2386,6 @@ void Temperature::readings_ready() {
 
   // Filament Sensor - can be read any time since IIR filtering is used
   TERN_(FILAMENT_WIDTH_SENSOR, filwidth.reading_ready());
-
-  #if HAS_SMARTHOTEND
-    // Send commands/heartbeat; telemetry parsing runs from idle().
-    SmartHotend::tick();
-    // Comms-loss watchdog: if no telemetry for SMARTHOTEND_WATCHDOG_MS, fault.
-    if (!SmartHotend::commsOk()) max_temp_error((heater_id_t)SMARTHOTEND_HEATER);
-  #endif
 
   #if HAS_HOTEND
     HOTEND_LOOP() temp_hotend[e].reset();

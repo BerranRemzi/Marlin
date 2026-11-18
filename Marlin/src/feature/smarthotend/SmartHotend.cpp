@@ -44,10 +44,9 @@ volatile uint8_t  SmartHotend::status        = 0;
 uint8_t      SmartHotend::cmd_heater_pwm = 0;
 uint8_t      SmartHotend::cmd_pfan_pwm   = 0;
 uint8_t      SmartHotend::cmd_bl_cmd     = SH_BL_IDLE;
-volatile bool SmartHotend::cmd_dirty     = true;   // Send an initial zero frame
+bool         SmartHotend::cmd_dirty      = true;   // Send an initial zero frame
 
 volatile millis_t SmartHotend::last_tlm_ms      = 0;
-volatile millis_t SmartHotend::last_cmd_ms      = 0;
 millis_t          SmartHotend::last_heartbeat_ms = 0;
 
 uint8_t SmartHotend::rx_buf[SH_TLM_LEN];
@@ -91,7 +90,10 @@ void SmartHotend::pollRx() {
 }
 
 // --------------------------------------------------------------------------
-// tick() — called from the Temperature ISR. Non-blocking command TX only.
+// tick() — foreground command TX, called from manage_heater(). Sends a
+// frame when a field changed or the 1 s heartbeat is due. Serial writes
+// stay out of the Temperature ISR — manage_heater() runs from idle() and
+// from safe_delay() during blocking waits, so heartbeats never starve.
 // --------------------------------------------------------------------------
 
 void SmartHotend::tick() {
@@ -206,8 +208,7 @@ void SmartHotend::sendCommand() {
   for (uint8_t i = 0; i < SH_CMD_LEN; i++)
     SMARTHOTEND_SERIAL.write(frame[i]);
 
-  cmd_dirty      = false;
-  last_cmd_ms    = millis();
+  cmd_dirty = false;
 }
 
 #endif // SMARTHOTEND_ENABLED
