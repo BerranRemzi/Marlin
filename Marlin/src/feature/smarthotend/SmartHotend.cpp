@@ -37,7 +37,7 @@
 // Static member definitions
 // --------------------------------------------------------------------------
 
-volatile uint16_t SmartHotend::raw_adc       = 0;
+volatile uint16_t SmartHotend::raw_adc       = SH_ADC_NO_SENSOR_10BIT;
 volatile uint8_t  SmartHotend::endstop_flags = 0;
 volatile uint8_t  SmartHotend::status        = 0;
 
@@ -48,6 +48,7 @@ bool         SmartHotend::cmd_dirty      = true;   // Send an initial zero frame
 
 volatile millis_t SmartHotend::last_tlm_ms      = 0;
 millis_t          SmartHotend::last_heartbeat_ms = 0;
+volatile bool     SmartHotend::link_lost         = true;  // Boot: telemetry absent
 
 uint8_t SmartHotend::rx_buf[SH_TLM_LEN];
 uint8_t SmartHotend::rx_idx    = 0;
@@ -145,6 +146,7 @@ void SmartHotend::parseTelemetry() {
       endstop_flags = rx_buf[3];
       status        = rx_buf[4];
       last_tlm_ms   = received_ms;
+      link_lost     = false;
     CRITICAL_SECTION_END();
   }
 }
@@ -153,13 +155,22 @@ void SmartHotend::parseTelemetry() {
 // readRawADC() — returns the latest thermistor raw in Marlin's accumulated
 // units: adc_10bit * OVERSAMPLENR. This makes the smart hotend
 // indistinguishable from a local thermistor to Marlin's thermistor math.
+// When the link is lost (no valid telemetry for SMARTHOTEND_WATCHDOG_MS) the
+// value is pegged full-scale (5 V on the NTC divider → the coldest table
+// entry, e.g. -15 degC for the EPCOS NTC100 table) so Marlin shows the same
+// sensor-missing signature as an unplugged NTC and its native MINTEMP fault
+// path trips, instead of raw 0 mapping to a hot reading.
 // --------------------------------------------------------------------------
 
 uint16_t SmartHotend::readRawADC() {
   uint16_t adc;
-  CRITICAL_SECTION_START();
-    adc = raw_adc;
-  CRITICAL_SECTION_END();
+  if (link_lost)
+    adc = SH_ADC_NO_SENSOR_10BIT;
+  else {
+    CRITICAL_SECTION_START();
+      adc = raw_adc;
+    CRITICAL_SECTION_END();
+  }
   return adc * (uint16_t)OVERSAMPLENR;
 }
 
@@ -180,16 +191,27 @@ void SmartHotend::setPartFanPWM(uint8_t duty)     { if (duty != cmd_pfan_pwm)   
 void SmartHotend::setBLTouchCommand(uint8_t cmd)  { if (cmd != cmd_bl_cmd)     { cmd_bl_cmd     = cmd; cmd_dirty = true; } }
 
 // --------------------------------------------------------------------------
-// commsOk() — true if a valid telemetry frame arrived within the watchdog
-// window. Used by temperature.cpp to trigger a fault on link loss.
+// commsOk() — true while the no-telemetry watchdog has not tripped: a valid
+//   telemetry frame arrived within the watchdog window. Ticked once per
+//   manage_heater() cycle; the tripped state also pegs readRawADC() to the
+//   no-sensor sentinel until telemetry resumes (and stops tick() so the
+//   CH32V003's own comms watchdog forces the heater and part fan off).
 // --------------------------------------------------------------------------
 
 bool SmartHotend::commsOk() {
-  millis_t last;
-  CRITICAL_SECTION_START();
-    last = last_tlm_ms;
-  CRITICAL_SECTION_END();
-  return (millis() - last) < (millis_t)SMARTHOTEND_WATCHDOG_MS;
+  const millis_t now = millis();
+  if (link_lost) {
+    millis_t last;
+    CRITICAL_SECTION_START();
+      last = last_tlm_ms;
+    CRITICAL_SECTION_END();
+    if ((now - last) < (millis_t)SMARTHOTEND_WATCHDOG_MS) return true;
+    return false;
+  }
+
+  if ((now - last_tlm_ms) >= (millis_t)SMARTHOTEND_WATCHDOG_MS)
+    link_lost = true;              // Telemetry went missing → peg the ADC raw
+  return !link_lost;
 }
 
 // --------------------------------------------------------------------------

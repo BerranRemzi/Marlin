@@ -1045,9 +1045,27 @@ void Temperature::manage_heater() {
 
   #if HAS_SMARTHOTEND
     // Send commands/heartbeat; telemetry parsing runs from idle().
-    // Comms-loss watchdog: if no telemetry for SMARTHOTEND_WATCHDOG_MS, fault.
-    if (!SmartHotend::commsOk()) max_temp_error((heater_id_t)SMARTHOTEND_HEATER);
-    else SmartHotend::tick();
+    // Comms-loss watchdog: with no telemetry for SMARTHOTEND_WATCHDOG_MS,
+    // readRawADC() pegs full scale so the hotend reads the no-sensor cold
+    // floor (≈ -15°C, ADC at 5 V); tick() stops so the CH32V003 watchdog
+    // forces its heater off. Marlin's native cold-sensor machinery handles
+    // reporting, exactly like an unplugged thermistor.
+    if (SmartHotend::commsOk()) SmartHotend::tick();
+  #endif
+
+  #if HAS_SMARTHOTEND && SMARTHOTEND_DRIVES_E0
+    // The ISR skips the raw .update() and temp_dir checks for the driven
+    // heater (its raw is injected below) — run Marlin's native max/min
+    // checks here in the foreground instead, exactly like the MAX6675
+    // paths. min-temp is reported only while heating, so an unplugged
+    // smart hotend shows the cold-floor reading instead of halting at boot.
+    if (temp_hotend[0].celsius > _MIN(HEATER_0_MAXTEMP, temp_range[0].maxtemp))
+      max_temp_error(H_E0);
+    if (!SmartHotend::commsOk()) {
+      temp_hotend[0].soft_pwm_amount = 0;      // no duty flows while the link is down
+      if (temp_hotend[0].target > 0 && !is_preheating(0))
+        min_temp_error(H_E0);                  // heating → report the missing sensor natively
+    }
   #endif
 
   #if DISABLED(IGNORE_THERMOCOUPLE_ERRORS)
@@ -2350,14 +2368,14 @@ void Temperature::disable_all_heaters() {
  */
 void Temperature::update_raw_temperatures() {
 
-  #if HAS_TEMP_ADC_0 && DISABLED(HEATER_0_USES_MAX6675)
+  #if HAS_TEMP_ADC_0 && DISABLED(HEATER_0_USES_MAX6675) && DISABLED(SMARTHOTEND_DRIVES_E0)
     temp_hotend[0].update();
   #endif
 
   #if HAS_TEMP_ADC_1
     #if ENABLED(TEMP_SENSOR_1_AS_REDUNDANT)
       redundant_temperature_raw = temp_hotend[1].acc;
-    #elif DISABLED(HEATER_1_USES_MAX6675)
+    #elif DISABLED(HEATER_1_USES_MAX6675) && DISABLED(SMARTHOTEND_DRIVES_E1)
       temp_hotend[1].update();
     #endif
   #endif
@@ -2403,9 +2421,9 @@ void Temperature::readings_ready() {
   #if HAS_HOTEND
 
     static constexpr int8_t temp_dir[] = {
-      TERN(HEATER_0_USES_MAX6675, 0, TEMPDIR(0))
+      TERN(HEATER_0_USES_MAX6675, 0, TERN(SMARTHOTEND_DRIVES_E0, 0, TEMPDIR(0)))
       #if HAS_MULTI_HOTEND
-        , TERN(HEATER_1_USES_MAX6675, 0, TEMPDIR(1))
+        , TERN(HEATER_1_USES_MAX6675, 0, TERN(SMARTHOTEND_DRIVES_E1, 0, TEMPDIR(1)))
         #if HOTENDS > 2
           #define _TEMPDIR(N) , TEMPDIR(N)
           REPEAT_S(2, HOTENDS, _TEMPDIR)

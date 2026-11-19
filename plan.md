@@ -141,7 +141,7 @@ Offset  Field           Size  Description
 | Watchdog | Timeout | Action |
 |----------|---------|--------|
 | CH32v003: no valid command frame from Marlin | **1000 ms** | HEATER_PWM=0, PFAN_PWM=0. HSFan stays ON (pull-up + local rule keeps heatsink cooled). Set STATUS bit2. |
-| Marlin: no valid telemetry frame from CH32v003 | **1000 ms** | Stop sending heater PWM (send 0), flag `TempSensor_0` fault, halt print via existing `max_temp_error`/`min_temp_error`/`TempError` path. |
+| Marlin: no valid telemetry frame from CH32v003 | **1000 ms** | Stop sending heater PWM (tick() stops → CH32v003 watchdog forces its heater off), peg the injected ADC raw to full scale (1023 × OVERSAMPLENR) so the hotend reads the no-sensor cold floor (≈ −15 °C, ADC at 5 V), and let Marlin's native MINTEMP / thermal-runaway machinery report the missing sensor exactly like an unplugged NTC. |
 | CH32v003: ADC pegged at 0 or max | **500 ms** | HEATER_PWM=0 locally. Send max 10-bit ADC (1023) in telemetry → Marlin scales to 16368 → native `max_temp_error` trips. (No dedicated status bit — see §3.5.) |
 | Marlin heartbeat | every **1000 ms** when idle | Re-send last command frame to keep CH32v003 watchdog fed. |
 
@@ -254,6 +254,14 @@ class SmartHotend {
 ```
 
 `TEMP_SENSOR_0` stays at its current value (`1` = EPCOS 100K) — **no change needed**. The thermistor circuit is replicated on the hotend with the same NTC100, so raw ADC values are identical for a given temperature. Marlin still owns the thermistor table; the CH32v003 just sends raw ADC.
+
+**No-sensor behavior (link loss / boot before first telemetry frame):** the injected ADC raw is
+pegged full scale (`SH_ADC_NO_SENSOR_10BIT` = 1023 × `OVERSAMPLENR`) instead of 0. A real NTC with
+its pull-up reads full scale when unplugged (ADC = 5 V ≈ −15 °C, the table's cold floor for the
+EPCOS NTC100 table), so a missing SmartHotend presents the same signature Marlin already handles
+natively: the cold floor reading, stock MINTEMP / thermal-runaway reporting while heating, and zero
+heater duty (stock mintemp cutoff, no residual PID integrator output). Raw 0 would map to the
+table's *hottest* entry and would otherwise raise a misleading MAXTEMP error.
 
 ### 5.3 Integration into `temperature.cpp` (mirror MAX6675 pattern)
 

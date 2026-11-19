@@ -1705,6 +1705,12 @@ static_assert(hbm[Z_AXIS] >= 0, "HOMING_BUMP_MM.Z must be greater than or equal 
   #if SMARTHOTEND_HEATER >= HOTENDS
     #error "SMARTHOTEND_HEATER must be less than HOTENDS."
   #endif
+  #if SMARTHOTEND_HEATER > 0
+    #error "SMARTHOTEND currently supports driving hotend 0 only. Set SMARTHOTEND_HEATER to 0."
+  #endif
+  #if HAS_MULTI_HOTEND
+    #error "SMARTHOTEND currently requires a single-hotend machine (no ISR-side checks are wired for additional hotends alongside a SmartHotend)."
+  #endif
   #if TEMP_SENSOR_0 == 0 && SMARTHOTEND_HEATER == 0
     #error "TEMP_SENSOR_0 must be set (non-zero) when SMARTHOTEND_HEATER is 0. The CH32V003 replicates the thermistor circuit; set TEMP_SENSOR_0 to the matching NTC type (e.g. 1 for EPCOS 100K)."
   #endif

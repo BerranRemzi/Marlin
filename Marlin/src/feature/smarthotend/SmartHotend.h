@@ -70,6 +70,14 @@
 #define SH_ST_COMMS_OK    0       // CH32V003 received a command < 1 s ago
 #define SH_ST_WD_TRIPPED  2       // CH32V003 watchdog tripped (heater forced off)
 
+// Sentinel thermistor value used when telemetry is absent (comms loss, boot
+// before first frame): ADC pegged at full scale (5 V on the NTC divider).
+// Matched to the CH32V003 contract of reporting 0x3FF on its local ADC fault
+// (plan.md §3.5); tables map it to their coldest entry (e.g. -15 °C for the
+// EPCOS NTC100 table), so Marlin's native MINTEMP path reports the missing
+// sensor like an unplugged thermistor.
+#define SH_ADC_NO_SENSOR_10BIT 1023
+
 // --------------------------------------------------------------------------
 // SmartHotend class
 // --------------------------------------------------------------------------
@@ -91,8 +99,18 @@ class SmartHotend {
 
     // Latest thermistor raw value in Marlin's accumulated-ADC units.
     // Returns adc_10bit * OVERSAMPLENR so it is indistinguishable from a
-    // local thermistor to Marlin's thermistor math.
+    // local thermistor to Marlin's thermistor math. When telemetry is absent
+    // (link loss, or boot before the first valid frame) the returned value
+    // is pegged full-scale so the reading shows the "no sensor" cold floor
+    // (e.g. ≈ -15 degC and the ADC at 5 V for the EPCOS NTC100 table) — the
+    // same fault signature an unplugged NTC produces — instead of raw 0
+    // mapping to a hot reading.
     static uint16_t readRawADC();
+
+    // Comms health: true while the no-telemetry watchdog has not tripped.
+    // While false, readRawADC() pegs full scale (no-sensor signature) and
+    // tick() is skipped so the CH32V003's own watchdog forces its heater off.
+    static bool commsOk();
 
     // Endstop states from the telemetry cache.
     static bool zEndstopTriggered();
@@ -106,9 +124,6 @@ class SmartHotend {
 
     // NOTE: No HSFan API — the CH32V003 owns the heatsink fan entirely.
     // NOTE: No LED API — PD4 hotend LED is owned by the CH32V003 (local rule).
-
-    // Comms health: true if a valid telemetry frame was received recently.
-    static bool commsOk();
 
     // Assemble and transmit a command frame. Foreground context only.
     static void sendCommand();
@@ -131,6 +146,7 @@ class SmartHotend {
     // --- Timing / watchdog ---
     static volatile millis_t last_tlm_ms;    // millis() of last valid telemetry
     static millis_t last_heartbeat_ms;       // millis() of last heartbeat send
+    static volatile bool link_lost;          // No-telemetry watchdog tripped
 
     // --- RX frame parser state ---
     static uint8_t  rx_buf[SH_TLM_LEN];

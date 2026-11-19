@@ -1769,6 +1769,15 @@
   #if ENABLED(SMARTHOTEND_ENDSTOPS)
     #define HAS_SMARTHOTEND_ENDSTOPS 1
   #endif
+  // The hotend driven by the SmartHotend has no local ADC input: its raw
+  // value is injected in the foreground (manage_heater), so the Temperature
+  // ISR must not accumulate or range-check it — mirroring the MAX6675
+  // heaters, which disable the ISR-side .update() and temp_dir check too.
+  #if SMARTHOTEND_HEATER == 0
+    #define SMARTHOTEND_DRIVES_E0 1
+  #elif SMARTHOTEND_HEATER == 1
+    #define SMARTHOTEND_DRIVES_E1 1
+  #endif
 #endif
 
 #if ENABLED(JOYSTICK)
