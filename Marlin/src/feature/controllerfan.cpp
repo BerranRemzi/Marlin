@@ -74,9 +74,19 @@ void ControllerFan::update() {
       )
     );
 
-    // If any of the drivers or the heated bed are enabled...
-    if (motor_on || TERN0(HAS_HEATED_BED, thermalManager.temp_bed.soft_pwm_amount > 0))
-      lastMotorOn = ms; //... set time to NOW so the fan will turn on
+    #if HAS_HOTEND
+      #define _HOTEND_TARGETED(N) || (thermalManager.temp_hotend[N].target > 0)
+      const bool hotend_on = false REPEAT(HOTENDS, _HOTEND_TARGETED);
+      #undef _HOTEND_TARGETED
+    #else
+      constexpr bool hotend_on = false;
+    #endif
+
+    // If any of the drivers, heated beds, or hotends are enabled/active...
+    if (motor_on
+        || TERN0(HAS_HEATED_BED, thermalManager.temp_bed.soft_pwm_amount > 0)
+        || hotend_on
+    ) lastMotorOn = ms; //... set time to NOW so the fan will turn on
 
     // Fan Settings. Set fan > 0:
     //  - If AutoMode is on and steppers have been enabled for CONTROLLERFAN_IDLE_TIME seconds.

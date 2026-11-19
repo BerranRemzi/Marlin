@@ -1623,7 +1623,10 @@ static_assert(hbm[Z_AXIS] >= 0, "HOMING_BUMP_MM.Z must be greater than or equal 
   #endif
 #endif
 
-#if HAS_FAN0 && CONTROLLER_FAN_PIN == FAN_PIN
+// FAN0 (D9 on RAMPS) is a virtual fan under the SmartHotend: M106 duty is
+// routed to the CH32V003 over UART and the local pin stays inert, so its
+// header is free to double as the controller fan.
+#if HAS_FAN0 && CONTROLLER_FAN_PIN == FAN_PIN && !HAS_SMARTHOTEND
   #error "You cannot set CONTROLLER_FAN_PIN equal to FAN_PIN."
 #endif
 

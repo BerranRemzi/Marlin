@@ -408,3 +408,77 @@ Add validation:
 - HSFan control from Marlin (CH32v003 owns it).
 - LED control from Marlin (CH32v003 owns PD4 locally).
 - PID on CH32v003 (Marlin owns it).
+
+## 10. Electronics cooling fan on D9 (RAMPS FAN0 header)
+
+### 10.1 Goal
+
+Cool the electronics — power supply, stepper drivers, MOSFETs/transistors — whenever they
+generate heat. The fan must run at **100 %** while any stepper driver, heated bed, or
+hotend heater is active, and stop ~60 s after the last heat source turns off.
+
+### 10.2 Why D9 is free despite being FAN0
+
+On `BOARD_RAMPS_14_EFB` the RAMPS headers are D10 = hotend heater, D9 = FAN0 (part
+cooling), D8 = heated bed. With the SmartHotend in place, FAN0 is a **virtual fan**: M106
+duty is routed over UART to the CH32V003 ([planner.cpp](Marlin/src/module/planner.cpp) →
+`SmartHotend::setPartFanPWM`), the local FAN0 soft-PWM ISR paths are compiled out
+(`DISABLED(SMARTHOTEND_ENABLED)`), and nothing initializes or drives pin 9. Repurposing
+the D9/FAN0 header as the electronics fan therefore cannot interfere with the SmartHotend
+or the part fan.
+
+### 10.3 Implementation (built-in feature + two small patches)
+
+Enabled Marlin's stock **`USE_CONTROLLER_FAN`** (controller fan) feature instead of adding
+custom code. Stock behavior already matches: it polls every 2.5 s, checks every stepper
+driver enable line plus `temp_bed.soft_pwm_amount > 0`, drives the pin at
+`CONTROLLERFAN_SPEED_ACTIVE` (255 = 100 %) while any source is on, then drops to idle/off
+after `CONTROLLERFAN_IDLE_TIME` (60 s).
+
+Changes:
+
+1. **`Marlin/Configuration_adv.h`** — `#define USE_CONTROLLER_FAN` and
+   `#define CONTROLLER_FAN_PIN 9`. Defaults kept: active 255 / idle 0 / idle time 60 s.
+2. **`Marlin/src/feature/controllerfan.cpp`** — added the hotend trigger the stock feature
+   lacks: `hotend_on = false REPEAT(HOTENDS, _HOTEND_TARGETED)` with
+   `_HOTEND_TARGETED(N) || (thermalManager.temp_hotend[N].target > 0)`. A hotend with a
+   target above 0 (preheat / PID tuning / heating / holding) now counts as a heat source.
+3. **`Marlin/src/inc/SanityCheck.h`** — the stock guard rejects
+   `CONTROLLER_FAN_PIN == FAN_PIN` (same pin cannot serve two fans). FAN0 is virtual here,
+   so the guard is gated with `&& !HAS_SMARTHOTEND` to permit the D9 alias.
+
+### 10.4 Behavior
+
+| Condition | Fan (D9) |
+|---|---|
+| Boot, idle | off |
+| Any stepper driver enabled (motion, homing, motors held) | 100 % |
+| Heated bed actively heating or holding (`soft_pwm > 0`) | 100 % |
+| Any hotend target > 0 | 100 % |
+| All sources off for 60 s | off |
+
+### 10.5 Wiring
+
+Standard RAMPS FAN0 header: fan +
+→ D9 header pin, fan − → FAN0 MOSFET (ground side); 12 V from PSU terminal. RAMPS FAN
+connectors do not use PWM tach lines here — the fan is driven fully on / fully off.
+(D9 is also a hardware-PWM-capable pin on timer1, but the 100 %/0 % duty needs no PWM.)
+
+### 10.6 Validation
+
+Firmware: `pio run -e mega2560` must build clean with the SanityCheck alias active.
+
+On hardware:
+- `M42 P9 S255` → fan spins; `M42 P9 S0` → stops (raw pin test).
+- `M104 S200` → fan spins; `M104 S0` → stops ~60 s later.
+- `M140 S60` → fan spins; `M140 S0` → stops ~60 s later.
+- Move axes / home → fan spins; ~60 s after steppers release → stops.
+- `M106 S255` drives only the CH32V003 part fan — D9 must stay off (no regression).
+
+### 10.7 Notes / risks
+
+- The 2.5 s polling interval of the controller fan is fine: electronics heat generation
+  is on the scale of minutes, so sub-3 s latency is ample.
+- `PSU_CONTROL` / `AUTO_POWER_*` are disabled in this Configuration — no interaction.
+- If `CONTROLLER_FAN_EDITABLE` is ever enabled, M710 stores the fan settings in EEPROM;
+  it was deliberately left off (fixed 100 %/60 s behavior, no extra EEPROM state).
