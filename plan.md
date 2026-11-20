@@ -469,10 +469,11 @@ connectors do not use PWM tach lines here — the fan is driven fully on / fully
 Firmware: `pio run -e mega2560` must build clean with the SanityCheck alias active.
 
 On hardware:
-- `M42 P9 S255` → fan spins; `M42 P9 S0` → stops (raw pin test).
 - `M104 S200` → fan spins; `M104 S0` → stops ~60 s later.
 - `M140 S60` → fan spins; `M140 S0` → stops ~60 s later.
 - Move axes / home → fan spins; ~60 s after steppers release → stops.
+- Note: `M42 P9` cannot raw-test this pin — M42 intercepts `FAN0_PIN` (same pin 9) and
+  redirects the value to `thermalManager.fan_speed[0]` (the virtual part fan over UART).
 - `M106 S255` drives only the CH32V003 part fan — D9 must stay off (no regression).
 
 ### 10.7 Notes / risks
