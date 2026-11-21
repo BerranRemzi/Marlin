@@ -87,10 +87,10 @@ class SmartHotend {
     // Setup USART, pins, buffers. Call once at boot.
     static void init();
 
-    // Called from idle() in foreground context to drain the UART RX buffer.
-    // Keep this as the only caller that parses telemetry. manage_heater()
-    // also polls the UART via SmartHotend::pollRx() so telemetry stays
-    // fresh inside safe_delay()/blocking waits, which never reach idle().
+    // Drain and parse telemetry in foreground context. Called from idle()
+    // and from manage_heater() (temperature.cpp) — the latter keeps the RX
+    // ring fresh during safe_delay()/blocking waits, which never reach
+    // idle(); see plan.md §5a.
     static void pollRx();
 
     // Called from manage_heater() in foreground context (idle(), safe_delay()
@@ -98,6 +98,7 @@ class SmartHotend {
     // command frames when a field changed or the 1 s heartbeat is due — the
     // only place serial writes happen, never from the Temperature ISR.
     static void tick();
+
     // Latest thermistor raw value in Marlin's accumulated-ADC units.
     // Returns adc_10bit * OVERSAMPLENR so it is indistinguishable from a
     // local thermistor to Marlin's thermistor math. When telemetry is absent

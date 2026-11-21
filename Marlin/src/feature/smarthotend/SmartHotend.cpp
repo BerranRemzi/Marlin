@@ -69,32 +69,54 @@ uint8_t SmartHotend::crc8(const uint8_t *p, uint8_t len) {
 }
 
 // --------------------------------------------------------------------------
-// SMARTHOTEND_DIAG — per-second RX accounting and peg forensics.
-//   Track: bytes drained, CRC-valid frames, CRC failures, and the exact
-//   outage spans (PEG at watchdog trip, RECOVERED at first good frame with
-//   the outage duration). Everything prints Error: so it lands in the same
-//   serial stream as the thermal errors.
+// Diagnostics (SMARTHOTEND_DIAG, built with -DSMARTHOTEND_DIAG in env
+// mega2560-diag). Forensics for the no-sensor peg: classifies each watchdog
+// trip ("SH_DIAG: PEG ..." with trailing RX byte/frame/CRC-fail counters)
+// and each recovery ("SH_DIAG: link back (gap Nms)"), and reports lines the
+// CH32V003 itself sends — an adc=1023 payload inside a CRC-valid frame
+// means the toolhead measured a dead sensor, NOT a comms fault. All lines
+// print as Error: so they interleave with the native thermal errors. The
+// stubs below optimize away entirely when the flag is off.
 // --------------------------------------------------------------------------
 
 #if ENABLED(SMARTHOTEND_DIAG)
 
-  static uint32_t sh_diag_bytes = 0;      // bytes since last report
-  static uint32_t sh_diag_frames = 0;     // CRC-valid frames since last report
-  static uint32_t sh_diag_crcfail = 0;    // CRC rejections (frames) since last report
+  static uint32_t sh_diag_bytes, sh_diag_frames, sh_diag_crcfail; // since last report
 
-  static uint32_t sh_peg_bytes = 0;       // RX byte counter snapshot AT peg time
-  static uint32_t sh_peg_frames = 0;
-  static uint32_t sh_peg_crcfail = 0;
+  static void shDiagRx(const uint8_t)        { sh_diag_bytes++; }
+  static void shDiagFrame(const bool crc_ok) { if (crc_ok) sh_diag_frames++; else sh_diag_crcfail++; }
 
-  #define SH_DIAG_PEG_NOW() do {                                          \
-    sh_peg_bytes    = sh_diag_bytes;                                      \
-    sh_peg_frames   = sh_diag_frames;                                     \
-    sh_peg_crcfail  = sh_diag_crcfail;                                    \
-    sh_diag_bytes = sh_diag_frames = sh_diag_crcfail = 0;                 \
-    SERIAL_ERROR_MSG("SH_DIAG: PEG comms watchdog tripped (no telemetry ~", (int)SMARTHOTEND_WATCHDOG_MS, "ms) trailing-window: bytes=", sh_peg_bytes, " frames=", sh_peg_frames, " crcfail=", sh_peg_crcfail); \
-  } while(0)
+  static void shDiagPeg() {
+    SERIAL_ERROR_MSG("SH_DIAG: PEG no telemetry for ", (int)SMARTHOTEND_WATCHDOG_MS,
+      "ms (last window: bytes=", sh_diag_bytes, " frames=", sh_diag_frames, " crcfail=", sh_diag_crcfail, ")");
+    sh_diag_bytes = sh_diag_frames = sh_diag_crcfail = 0;
+  }
 
-#endif // SMARTHOTEND_DIAG
+  static void shDiagRecover(const millis_t gap_ms) {
+    sh_diag_bytes = sh_diag_frames = sh_diag_crcfail = 0;   // restart accounting
+    SERIAL_ERROR_MSG("SH_DIAG: link back (gap ", (int)gap_ms, "ms)");
+  }
+
+  static void shDiagPegEdge(const uint16_t adc, const uint8_t endstops, const uint8_t st) {
+    static bool sensor_pegged = false;
+    static uint8_t last_status = 0;
+    if (adc == SH_ADC_NO_SENSOR_10BIT && !sensor_pegged) {
+      sensor_pegged = true;
+      SERIAL_ERROR_MSG("SH_DIAG: CH32 reports adc=1023 (sensor-side peg) endstop=0x", endstops, " status=0x", st);
+    }
+    else if (adc != SH_ADC_NO_SENSOR_10BIT) sensor_pegged = false;
+    if (st != last_status) { last_status = st; SERIAL_ERROR_MSG("SH_DIAG: status=0x", st); }
+  }
+
+#else
+
+  static inline void shDiagRx(const uint8_t) {}
+  static inline void shDiagFrame(const bool) {}
+  static inline void shDiagPeg() {}
+  static inline void shDiagRecover(const millis_t) {}
+  static inline void shDiagPegEdge(const uint16_t, const uint8_t, const uint8_t) {}
+
+#endif
 
 // --------------------------------------------------------------------------
 // init() — start the UART, send an initial zero-duty command frame.
@@ -116,7 +138,8 @@ void SmartHotend::init() {
 // safe_delay() during BLTouch/probe command chains and other blocking waits
 // that never reach idle(). Without the manage_heater() poll, the RX ring
 // (32 B) overflows ~266 ms into any such block and the comms watchdog then
-// pegs the hotend to the no-sensor floor — lethal while heating.
+// pegs the hotend to the no-sensor floor — lethal while heating. See
+// plan.md §5a for the full analysis.
 // --------------------------------------------------------------------------
 
 void SmartHotend::pollRx() {
@@ -138,7 +161,9 @@ void SmartHotend::tick() {
     sendCommand();
     last_heartbeat_ms = now;
   }
-}// --------------------------------------------------------------------------
+}
+
+// --------------------------------------------------------------------------
 // parseTelemetry() — scan the RX ring buffer for a valid 6-byte frame.
 //   Frame: [0x55] [ADC_HI] [ADC_LO] [ENDSTOP_FLAGS] [STATUS] [CRC8]
 //   ADC is 10-bit: bits 9..2 in ADC_HI, bits 1..0 in ADC_LO upper nibble.
@@ -146,10 +171,8 @@ void SmartHotend::tick() {
 
 void SmartHotend::parseTelemetry() {
   while (SMARTHOTEND_SERIAL.available()) {
-    #if ENABLED(SMARTHOTEND_DIAG)
-      sh_diag_bytes++;
-    #endif
     const uint8_t b = (uint8_t)SMARTHOTEND_SERIAL.read();
+    shDiagRx(b);
 
     if (!rx_in_frame) {
       if (b == SH_TLM_SYNC) {
@@ -170,37 +193,14 @@ void SmartHotend::parseTelemetry() {
     rx_idx = 0;
 
     const uint8_t crc = crc8(rx_buf, SH_TLM_LEN - 1);
-    if (crc != rx_buf[SH_TLM_LEN - 1]) {   // CRC mismatch → drop
-      #if ENABLED(SMARTHOTEND_DIAG)
-        sh_diag_crcfail++;
-      #endif
-      continue;
-    }
-    #if ENABLED(SMARTHOTEND_DIAG)
-      sh_diag_frames++;
-    #endif
+    const bool crc_ok = (crc == rx_buf[SH_TLM_LEN - 1]);
+    shDiagFrame(crc_ok);
+    if (!crc_ok) continue;   // CRC mismatch → drop
 
     // --- Decode telemetry ---
     const uint16_t adc = ((uint16_t)rx_buf[1] << 2) | ((rx_buf[2] >> 6) & 0x03);
     const millis_t received_ms = millis();
-    #if ENABLED(SMARTHOTEND_DIAG)
-      // Distinguish a genuine sensor-side peg (CRC-valid frame reports 1023)
-      // from a comms-side peg (watchdog below). One line per peg edge.
-      static bool diag_peg_active = false;
-      if (adc == SH_ADC_NO_SENSOR_10BIT) {
-        if (!diag_peg_active) {
-          diag_peg_active = true;
-          SERIAL_ERROR_MSG("SH_DIAG: CH32 reports adc=1023 (sensor-side peg) endstop=0x", endstop_flags, " status=0x", status);
-        }
-      }
-      else diag_peg_active = false;
-      static uint8_t diag_last_status = 0;
-      if (status != diag_last_status) {
-        diag_last_status = status;
-        SERIAL_ERROR_MSG("SH_DIAG: status=0x", status);
-      }
-      // Link recovery point is reported by commsOk() ("link back (gap Nms)").
-    #endif
+    shDiagPegEdge(adc, rx_buf[3], rx_buf[4]);
     CRITICAL_SECTION_START();
       raw_adc       = adc;
       endstop_flags = rx_buf[3];
@@ -209,7 +209,7 @@ void SmartHotend::parseTelemetry() {
       link_lost     = false;
     CRITICAL_SECTION_END();
   }
-} // parseTelemetry
+}
 
 // --------------------------------------------------------------------------
 // readRawADC() — returns the latest thermistor raw in Marlin's accumulated
@@ -266,10 +266,7 @@ bool SmartHotend::commsOk() {
       last = last_tlm_ms;
     CRITICAL_SECTION_END();
     if ((now - last) < (millis_t)SMARTHOTEND_WATCHDOG_MS) {
-      #if ENABLED(SMARTHOTEND_DIAG)
-        SERIAL_ERROR_MSG("SH_DIAG: link back (gap ", (int)(now - last), "ms)");
-        sh_diag_bytes = sh_diag_frames = sh_diag_crcfail = 0;   // restart accounting
-      #endif
+      shDiagRecover(now - last);
       link_lost = false;
       return true;
     }
@@ -277,10 +274,8 @@ bool SmartHotend::commsOk() {
   }
 
   if ((now - last_tlm_ms) >= (millis_t)SMARTHOTEND_WATCHDOG_MS) {
-    link_lost = true;              // Telemetry went missing → peg the ADC raw
-    #if ENABLED(SMARTHOTEND_DIAG)
-      SH_DIAG_PEG_NOW();
-    #endif
+    link_lost = true;   // Telemetry went missing → peg readRawADC()
+    shDiagPeg();
   }
   return !link_lost;
 }
