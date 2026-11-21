@@ -290,6 +290,27 @@ The MAX6675 is the existing model for "external temp source injects raw value":
 
 5. **`tick()` call** — invoke `SmartHotend::tick()` from `manage_heater()` (foreground: idle(), safe_delay() during blocking waits, planner.synchronize() during moves). Serial writes never happen in the Temperature ISR.
 
+5a. **`pollRx()` call — telemetry draining MUST include `manage_heater()`.**
+    `idle()` alone is not sufficient: BLTouch/probe command chains
+    (`Servo::move()` + `BLTouch::command()`) block in `safe_delay()` for
+    0.5–4 s per command (M119 runs two such chains; `bltouch.init()` and
+    `probe.deploy()` run several each during every G28 with Z), and
+    `safe_delay()` pumps only `thermalManager.manage_heater()` — it never
+    reaches `idle()`. With RX parsed only from `idle()`, the 32-byte UART
+    ring overflows ~266 ms into any such block; no valid frames parse and
+    the 1000 ms comms watchdog pegs hotend 0 to the no-sensor floor
+    (−15 °C) — which, at 0.4–1.4 s after an M119 or ~4.5 s into a G28
+    while a hotend target is active, is an instant native `MINTEMP E1`
+    kill. THIS WAS THE ROOT CAUSE OF EVERY "MINTEMP E1" DURING SD PRINTS.
+    Fix (implemented in temperature.cpp `manage_heater()`): poll
+    `SmartHotend::pollRx()` alongside `tick()` so the RX ring drains in
+    every context `manage_heater()` runs from. Verified: M119×5 + G28×2
+    with an armed hotend target produced zero pegs, zero kills (run 9).
+    `SMARTHOTEND_DIAG` (env `mega2560-diag`) adds `SH_DIAG` lines that
+    classify each peg (comms watchdog vs CH32-reported adc=1023), print
+    trailing RX byte/frame/CRC-fail counters at peg time, and the exact
+    recovery gap — keep it for future field debugging.
+
 6. **Comms fault** — if `!SmartHotend::commsOk()` for >1s, trigger `min_temp_error(H_E0)` / a `TempError` so Marlin halts (reuses existing fault machinery).
 
 ### 5.4 Endstop / BLTouch integration

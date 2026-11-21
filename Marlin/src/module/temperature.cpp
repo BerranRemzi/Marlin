@@ -1044,12 +1044,20 @@ void Temperature::manage_heater() {
   updateTemperaturesFromRawValues(); // also resets the watchdog
 
   #if HAS_SMARTHOTEND
-    // Send commands/heartbeat; telemetry parsing runs from idle().
-    // Comms-loss watchdog: with no telemetry for SMARTHOTEND_WATCHDOG_MS,
-    // readRawADC() pegs full scale so the hotend reads the no-sensor cold
-    // floor (≈ -15°C, ADC at 5 V); tick() stops so the CH32V003 watchdog
-    // forces its heater off. Marlin's native cold-sensor machinery handles
-    // reporting, exactly like an unplugged thermistor.
+    // Drain telemetry in every context manage_heater() runs from — including
+    // the 50 ms chunks inside safe_delay(), which idle() never reaches during
+    // BLTouch/probe command chains (M119, G28 deploy/stow block for seconds
+    // and starve idle()). RX parsing MUST keep up or the comms watchdog pegs
+    // the hotend reading to the no-sensor floor while a heater is on.
+    // Poll the UART in small chunks: a single 6-byte read burst is ~0.5 ms,
+    // negligible next to the 4 ms temperature ISR budget.
+    SmartHotend::pollRx();
+    // Send commands/heartbeat. Comms-loss watchdog: with no telemetry for
+    // SMARTHOTEND_WATCHDOG_MS, readRawADC() pegs full scale so the hotend
+    // reads the no-sensor cold floor (≈ -15°C, ADC at 5 V); tick() stops so
+    // the CH32V003 watchdog forces its heater off. Marlin's native
+    // cold-sensor machinery handles reporting, exactly like an unplugged
+    // thermistor.
     if (SmartHotend::commsOk()) SmartHotend::tick();
   #endif
 
